@@ -1,0 +1,50 @@
+This file contains example code from a study looking at the effect of an intervention on the freqency with which 
+children walk or bike to school. The study was a cluster randomized trial. We used GEEs in order to 
+apply causal mediation techniques as mixed-effect models cannot accomidate mediation. Missing data
+were handled with multiple imputation (code not included). 
+
+NOTE: this study utilized an RCT design. If code is applied to an observational study, investigators
+should likely not adjust for baseline levels of the outcome. See "When Is Baseline Adjustment Useful in Analyses of Change? 
+An Example with Education and Cognitive Change" by Glymour et al in AJE 2005.
+
+PACKAGES
+MICE
+MITOOLS
+MICEADDS
+SANDWICH
+TEXREG
+
+1. FORMAT MI DATA AS DATLIST
+datlist <- miceadds::mids2datlist(imp.scored)
+
+2. RUN MODELS FOR THE OUTCOME ADJUSTING FOR CONFOUNDERS, BUT NOT BASELINE OUTCOME LEVEL. CORRECT SE FOR
+CLUSTERING
+fit.lin.0=with(datlist, lm(freq_walk_diff~tx++age+boy+crace+dist_home_school+bmiz))
+betas0 <- lapply(fit.lin.0, coef)
+vars0 <- lapply(fit.lin.0, FUN = function(x){vcovCL(x, cluster = datlist[[1]]$chid + datlist[[1]]$school)}) 
+model0<-summary(pool_mi(betas0, vars0))
+
+3. RUN MODELS FOR THE OUTCOME ADJUSTING FOR CONFOUNDERS AND BASELINE OUTCOME LEVEL. CORRECT SE FOR
+CLUSTERING
+fit.lin.1=with(datlist, lm(freq_walk_diff~tx++age+boy+crace+dist_home_school+freq_walk_pre+bmiz))
+betas1 <- lapply(fit.lin.1, coef)
+vars1 <- lapply(fit.lin.1, FUN = function(x){vcovCL(x, cluster= datlist[[1]]$chid + datlist[[1]]$school)}) 
+model1<-summary(pool_mi(betas1, vars1))
+
+4. CREATE TABLE TO SHOW RESULTS FROM BOTH MODELS SIDE-BY-SIDE
+#model 0
+  tr0 <- createTexreg(
+    coef.names = row.names(model0), 
+    coef = model0$results, 
+    ci.low=model0$'(lower',
+    ci.up=model0$'upper)')
+
+#model 1
+  tr1 <- createTexreg(
+    coef.names = row.names(model1), 
+    coef = model1$results, 
+    ci.low=model1$'(lower',
+    ci.up=model1$'upper)')
+
+#create table
+screenreg(list(tr0, tr1), digits = 3, single.row=T, custom.model.names = c('Unadjusted for baseline', 'Adjusted for baseline')) 
